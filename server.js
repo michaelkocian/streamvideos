@@ -39,12 +39,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/videos', (req, res) => {
   try {
     const subdir = req.query.dir || '';
+    console.log(`[ACCESS] Listing directory: ${subdir || '/'} from ${req.ip}`);
     if (!isPathSafe(subdir)) {
+      console.warn(`[DENIED] Directory access: ${subdir}`);
       return res.status(403).json({ error: 'Access denied' });
     }
 
     const targetDir = path.join(VIDEO_DIR, subdir);
     if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+      console.warn(`[NOT FOUND] Directory: ${targetDir}`);
       return res.status(404).json({ error: 'Directory not found' });
     }
 
@@ -76,6 +79,7 @@ app.get('/api/videos', (req, res) => {
 
     res.json(items);
   } catch (err) {
+    console.error(`[ERROR] Failed to list directory: ${err}`);
     res.status(500).json({ error: 'Failed to list directory' });
   }
 });
@@ -83,10 +87,13 @@ app.get('/api/videos', (req, res) => {
 // Rate a video (name can include subdir path like "sub/file.mp4")
 app.post('/api/rate', (req, res) => {
   const { name, rating } = req.body;
+  console.log(`[RATE] ${name} set to ${rating} by ${req.ip}`);
   if (typeof name !== 'string' || !name || typeof rating !== 'number' || rating < -3 || rating > 5 || !Number.isInteger(rating)) {
+    console.warn(`[DENIED] Invalid rating: ${name} -> ${rating}`);
     return res.status(400).json({ error: 'Invalid name or rating (-3 to 5 integer)' });
   }
   if (!isPathSafe(name)) {
+    console.warn(`[DENIED] Rating access: ${name}`);
     return res.status(403).json({ error: 'Access denied' });
   }
 
@@ -100,17 +107,20 @@ app.post('/api/rate', (req, res) => {
 app.delete('/api/videos/*', (req, res) => {
   const name = req.params[0];
   if (!name || !isPathSafe(name)) {
+    console.warn(`[DENIED] Delete access: ${name}`);
     return res.status(403).json({ error: 'Access denied' });
   }
 
   const filePath = path.join(VIDEO_DIR, name);
   try {
     fs.unlinkSync(filePath);
+    console.log(`[DELETE] ${name} deleted by ${req.ip}`);
     const ratings = loadRatings();
     delete ratings[name];
     saveRatings(ratings);
     res.json({ success: true });
   } catch (err) {
+    console.error(`[ERROR] Failed to delete ${name}: ${err}`);
     res.status(err.code === 'ENOENT' ? 404 : 500).json({ error: 'Failed to delete' });
   }
 });
@@ -119,6 +129,7 @@ app.delete('/api/videos/*', (req, res) => {
 app.get('/api/stream/*', (req, res) => {
   const name = req.params[0];
   if (!name || !isPathSafe(name)) {
+    console.warn(`[DENIED] Stream access: ${name}`);
     return res.status(403).json({ error: 'Access denied' });
   }
 
@@ -127,6 +138,7 @@ app.get('/api/stream/*', (req, res) => {
   try {
     stat = fs.statSync(filePath);
   } catch {
+    console.warn(`[NOT FOUND] Stream file: ${filePath}`);
     return res.status(404).json({ error: 'File not found' });
   }
 
@@ -143,6 +155,8 @@ app.get('/api/stream/*', (req, res) => {
   const contentType = mimeTypes[ext] || 'application/octet-stream';
   const range = req.headers.range;
 
+  console.log(`[STREAM] ${name} (${fileSize} bytes) to ${req.ip}`);
+
   if (range) {
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
@@ -151,6 +165,7 @@ app.get('/api/stream/*', (req, res) => {
       : Math.min(start + CHUNK_SIZE - 1, fileSize - 1);
 
     if (start >= fileSize) {
+      console.warn(`[RANGE ERROR] ${name} start ${start} >= fileSize ${fileSize}`);
       return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
     }
 

@@ -10,7 +10,10 @@
 <body>
   <div class="header">
     <h1>VR Videos</h1>
-    <input type="text" class="search-box" id="searchBox" placeholder="Search videos..." autocomplete="off">
+    <div style="position:relative;display:inline-block;min-width:180px;width:100%;max-width:340px;">
+      <input type="text" class="search-box" id="searchBox" placeholder="Search videos..." autocomplete="off" style="width:100%;">
+      <button id="searchClear" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 6px;">&#x2715;</button>
+    </div>
     <select class="sort-select" id="sortBy">
       <option value="name-asc">Name A-Z</option>
       <option value="name-desc">Name Z-A</option>
@@ -22,7 +25,7 @@
       <option value="modified-asc">Oldest first</option>
     </select>
     <div class="grid-control">
-      <label>Grid</label>
+      <label>Zoom</label>
       <input type="range" class="grid-slider" id="gridSlider" min="1" max="6" value="1">
     </div>
   </div>
@@ -403,6 +406,12 @@
     searchBox.oninput = () => {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(renderList, 150);
+      document.getElementById('searchClear').style.display = searchBox.value ? 'block' : 'none';
+    };
+    document.getElementById('searchClear').onclick = () => {
+      searchBox.value = '';
+      document.getElementById('searchClear').style.display = 'none';
+      renderList();
     };
     sortBy.onchange = renderList;
 
