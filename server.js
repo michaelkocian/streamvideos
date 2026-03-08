@@ -27,41 +27,60 @@ function saveRatings(ratings) {
   fs.writeFileSync(RATINGS_FILE, JSON.stringify(ratings, null, 2));
 }
 
-function isPathSafe(name) {
-  const resolved = path.resolve(path.join(VIDEO_DIR, name));
-  return resolved.startsWith(VIDEO_DIR + path.sep);
+function isPathSafe(relPath) {
+  const resolved = path.resolve(path.join(VIDEO_DIR, relPath));
+  return resolved === VIDEO_DIR || resolved.startsWith(VIDEO_DIR + path.sep);
 }
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// List all videos
+// List videos and folders in a directory
 app.get('/api/videos', (req, res) => {
   try {
-    const files = fs.readdirSync(VIDEO_DIR);
+    const subdir = req.query.dir || '';
+    if (!isPathSafe(subdir)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const targetDir = path.join(VIDEO_DIR, subdir);
+    if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+
+    const files = fs.readdirSync(targetDir);
     const ratings = loadRatings();
-    const videos = [];
+    const items = [];
 
     for (const file of files) {
-      const ext = path.extname(file).toLowerCase();
-      if (VIDEO_EXTENSIONS.has(ext)) {
-        const stats = fs.statSync(path.join(VIDEO_DIR, file));
-        videos.push({
-          name: file,
-          size: stats.size,
-          rating: ratings[file] !== undefined ? ratings[file] : null,
-          modified: stats.mtimeMs
-        });
+      const fullPath = path.join(targetDir, file);
+      let stats;
+      try { stats = fs.statSync(fullPath); } catch { continue; }
+
+      if (stats.isDirectory()) {
+        items.push({ name: file, type: 'folder' });
+      } else {
+        const ext = path.extname(file).toLowerCase();
+        if (VIDEO_EXTENSIONS.has(ext)) {
+          const ratingKey = subdir ? subdir.replace(/\\/g, '/') + '/' + file : file;
+          items.push({
+            name: file,
+            type: 'video',
+            size: stats.size,
+            rating: ratings[ratingKey] !== undefined ? ratings[ratingKey] : null,
+            modified: stats.mtimeMs
+          });
+        }
       }
     }
 
-    res.json(videos);
+    res.json(items);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to list videos' });
+    res.status(500).json({ error: 'Failed to list directory' });
   }
 });
 
-// Rate a video
+// Rate a video (name can include subdir path like "sub/file.mp4")
 app.post('/api/rate', (req, res) => {
   const { name, rating } = req.body;
   if (typeof name !== 'string' || !name || typeof rating !== 'number' || rating < -3 || rating > 5 || !Number.isInteger(rating)) {
@@ -77,10 +96,10 @@ app.post('/api/rate', (req, res) => {
   res.json({ success: true });
 });
 
-// Delete a video
-app.delete('/api/videos/:name', (req, res) => {
-  const name = req.params.name;
-  if (!isPathSafe(name)) {
+// Delete a video (path can include subdirs)
+app.delete('/api/videos/*', (req, res) => {
+  const name = req.params[0];
+  if (!name || !isPathSafe(name)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
@@ -96,10 +115,10 @@ app.delete('/api/videos/:name', (req, res) => {
   }
 });
 
-// Stream video with HTTP Range support
-app.get('/api/stream/:name', (req, res) => {
-  const name = req.params.name;
-  if (!isPathSafe(name)) {
+// Stream video with HTTP Range support (path can include subdirs)
+app.get('/api/stream/*', (req, res) => {
+  const name = req.params[0];
+  if (!name || !isPathSafe(name)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 

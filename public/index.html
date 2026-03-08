@@ -21,7 +21,13 @@
       <option value="modified-desc">Newest first</option>
       <option value="modified-asc">Oldest first</option>
     </select>
+    <div class="grid-control">
+      <label>Grid</label>
+      <input type="range" class="grid-slider" id="gridSlider" min="1" max="6" value="1">
+    </div>
   </div>
+
+  <div class="breadcrumb" id="breadcrumb"></div>
 
   <div id="statsBar">
     <span class="stats" id="stats"></span>
@@ -59,9 +65,11 @@
 
   <script>
     // --- State ---
-    let videos = [];
+    let items = [];
+    let currentDir = '';
     let recentlyPlayed = JSON.parse(localStorage.getItem('vr_recent') || '[]');
     let deleteTarget = null;
+    let gridCols = parseInt(localStorage.getItem('vr_grid') || '1', 10);
 
     // --- DOM refs ---
     const videoList = document.getElementById('videoList');
@@ -73,12 +81,25 @@
     const modalTitle = document.getElementById('modalTitle');
     const confirmDialog = document.getElementById('confirmDialog');
     const confirmText = document.getElementById('confirmText');
+    const gridSlider = document.getElementById('gridSlider');
+    const breadcrumb = document.getElementById('breadcrumb');
+
+    gridSlider.value = gridCols;
+    applyGrid();
 
     // --- Helpers ---
     function fmtSize(bytes) {
       if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
       if (bytes >= 1048576) return (bytes / 1048576).toFixed(0) + ' MB';
       return (bytes / 1024).toFixed(0) + ' KB';
+    }
+
+    function videoKey(name) {
+      return currentDir ? currentDir + '/' + name : name;
+    }
+
+    function applyGrid() {
+      videoList.className = 'video-list' + (gridCols > 1 ? ' cols-' + gridCols : '');
     }
 
     function buildStars(videoName, currentRating, extraClass) {
@@ -121,12 +142,55 @@
       return container;
     }
 
+    // --- Breadcrumb ---
+    function renderBreadcrumb() {
+      breadcrumb.innerHTML = '';
+      const parts = currentDir ? currentDir.split('/') : [];
+
+      const root = document.createElement('button');
+      root.className = 'bc-link';
+      root.textContent = '\uD83C\uDFE0 Root';
+      root.onclick = () => navigateTo('');
+      breadcrumb.appendChild(root);
+
+      let accumulated = '';
+      for (let i = 0; i < parts.length; i++) {
+        const sep = document.createElement('span');
+        sep.className = 'bc-sep';
+        sep.textContent = ' / ';
+        breadcrumb.appendChild(sep);
+
+        accumulated += (i > 0 ? '/' : '') + parts[i];
+
+        if (i < parts.length - 1) {
+          const link = document.createElement('button');
+          link.className = 'bc-link';
+          link.textContent = parts[i];
+          const target = accumulated;
+          link.onclick = () => navigateTo(target);
+          breadcrumb.appendChild(link);
+        } else {
+          const cur = document.createElement('span');
+          cur.className = 'bc-current';
+          cur.textContent = parts[i];
+          breadcrumb.appendChild(cur);
+        }
+      }
+    }
+
     // --- Data ---
+    function navigateTo(dir) {
+      currentDir = dir;
+      loadVideos();
+    }
+
     async function loadVideos() {
       try {
-        const res = await fetch('/api/videos');
+        const url = '/api/videos' + (currentDir ? '?dir=' + encodeURIComponent(currentDir) : '');
+        const res = await fetch(url);
         if (!res.ok) throw new Error();
-        videos = await res.json();
+        items = await res.json();
+        renderBreadcrumb();
         renderList();
       } catch {
         videoList.innerHTML = '<div class="loading">Failed to load videos. Is the server running?</div>';
@@ -135,12 +199,15 @@
 
     function getFiltered() {
       const q = searchBox.value.toLowerCase().trim();
-      let list = q ? videos.filter(v => v.name.toLowerCase().includes(q)) : videos.slice();
+      const folders = items.filter(i => i.type === 'folder' && (!q || i.name.toLowerCase().includes(q)));
+      let vids = items.filter(i => i.type === 'video');
+      if (q) vids = vids.filter(v => v.name.toLowerCase().includes(q));
 
       const [field, dir] = sortBy.value.split('-');
       const m = dir === 'asc' ? 1 : -1;
 
-      list.sort((a, b) => {
+      folders.sort((a, b) => a.name.localeCompare(b.name) * m);
+      vids.sort((a, b) => {
         switch (field) {
           case 'name': return a.name.localeCompare(b.name) * m;
           case 'size': return (a.size - b.size) * m;
@@ -150,20 +217,44 @@
         }
       });
 
-      return list;
+      return { folders, videos: vids };
     }
 
     // --- Render ---
     function renderList() {
-      const filtered = getFiltered();
-      const totalSize = filtered.reduce((s, v) => s + v.size, 0);
-      const extra = filtered.length !== videos.length ? ` (${videos.length} total)` : '';
-      stats.textContent = `${filtered.length} videos \u2022 ${fmtSize(totalSize)}${extra}`;
+      const { folders, videos } = getFiltered();
+      const totalSize = videos.reduce((s, v) => s + v.size, 0);
+      const totalVideos = items.filter(i => i.type === 'video').length;
+      const extra = videos.length !== totalVideos ? ` (${totalVideos} total)` : '';
+      const folderCount = items.filter(i => i.type === 'folder').length;
+      const folderText = folderCount > 0 ? ` \u2022 ${folderCount} folders` : '';
+      stats.textContent = `${videos.length} videos${extra} \u2022 ${fmtSize(totalSize)}${folderText}`;
 
       const frag = document.createDocumentFragment();
 
-      for (const video of filtered) {
-        const pIdx = recentlyPlayed.indexOf(video.name);
+      // Render folders first
+      for (const folder of folders) {
+        const row = document.createElement('div');
+        row.className = 'folder-item';
+        row.onclick = () => navigateTo(currentDir ? currentDir + '/' + folder.name : folder.name);
+
+        const icon = document.createElement('span');
+        icon.className = 'folder-icon';
+        icon.textContent = '\uD83D\uDCC1';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'name';
+        nameEl.textContent = folder.name;
+
+        row.appendChild(icon);
+        row.appendChild(nameEl);
+        frag.appendChild(row);
+      }
+
+      // Render videos
+      for (const video of videos) {
+        const key = videoKey(video.name);
+        const pIdx = recentlyPlayed.indexOf(key);
         const row = document.createElement('div');
         row.className = 'video-item' + (pIdx >= 0 && pIdx < 5 ? ' played-' + (pIdx + 1) : '');
         row.onclick = () => playVideo(video.name);
@@ -191,10 +282,22 @@
           showDeleteConfirm(video.name);
         };
 
-        row.appendChild(nameEl);
-        row.appendChild(sizeEl);
-        row.appendChild(starsEl);
-        row.appendChild(del);
+        if (gridCols > 1) {
+          // Grid mode: name on top, then meta row
+          row.appendChild(nameEl);
+          const metaRow = document.createElement('div');
+          metaRow.className = 'meta-row';
+          metaRow.appendChild(sizeEl);
+          metaRow.appendChild(starsEl);
+          metaRow.appendChild(del);
+          row.appendChild(metaRow);
+        } else {
+          row.appendChild(nameEl);
+          row.appendChild(sizeEl);
+          row.appendChild(starsEl);
+          row.appendChild(del);
+        }
+
         frag.appendChild(row);
       }
 
@@ -204,17 +307,18 @@
 
     // --- Video playback ---
     function playVideo(name) {
-      recentlyPlayed = recentlyPlayed.filter(n => n !== name);
-      recentlyPlayed.unshift(name);
+      const key = videoKey(name);
+      recentlyPlayed = recentlyPlayed.filter(n => n !== key);
+      recentlyPlayed.unshift(key);
       if (recentlyPlayed.length > 5) recentlyPlayed.length = 5;
       localStorage.setItem('vr_recent', JSON.stringify(recentlyPlayed));
 
       modalTitle.textContent = name;
-      const v = videos.find(v => v.name === name);
+      const v = items.find(v => v.name === name && v.type === 'video');
       const modalStars = document.getElementById('modalStars');
       modalStars.innerHTML = '';
       modalStars.appendChild(buildStars(name, v ? v.rating : null, 'modal-stars'));
-      videoPlayer.src = '/api/stream/' + encodeURIComponent(name);
+      videoPlayer.src = '/api/stream/' + encodeURIComponent(key);
       videoModal.classList.add('active');
       renderList();
     }
@@ -231,13 +335,14 @@
 
     // --- Rating ---
     async function rateVideo(name, rating) {
+      const key = videoKey(name);
       try {
         await fetch('/api/rate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, rating })
+          body: JSON.stringify({ name: key, rating })
         });
-        const v = videos.find(v => v.name === name);
+        const v = items.find(v => v.name === name && v.type === 'video');
         if (v) v.rating = rating;
         renderList();
         // update modal stars if open
@@ -266,14 +371,15 @@
     document.getElementById('confirmYes').onclick = async () => {
       if (!deleteTarget) return;
       const name = deleteTarget;
+      const key = videoKey(name);
       confirmDialog.classList.remove('active');
       deleteTarget = null;
 
       try {
-        const res = await fetch('/api/videos/' + encodeURIComponent(name), { method: 'DELETE' });
+        const res = await fetch('/api/videos/' + encodeURIComponent(key), { method: 'DELETE' });
         if (res.ok) {
-          videos = videos.filter(v => v.name !== name);
-          recentlyPlayed = recentlyPlayed.filter(n => n !== name);
+          items = items.filter(v => v.name !== name);
+          recentlyPlayed = recentlyPlayed.filter(n => n !== key);
           localStorage.setItem('vr_recent', JSON.stringify(recentlyPlayed));
           renderList();
         } else {
@@ -282,6 +388,14 @@
       } catch {
         alert('Delete failed.');
       }
+    };
+
+    // --- Grid slider ---
+    gridSlider.oninput = () => {
+      gridCols = parseInt(gridSlider.value, 10);
+      localStorage.setItem('vr_grid', String(gridCols));
+      applyGrid();
+      renderList();
     };
 
     // --- Search & Sort ---
