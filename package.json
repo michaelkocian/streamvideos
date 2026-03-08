@@ -1,0 +1,12 @@
+{
+  "name": "vr-video-manager",
+  "version": "1.0.0",
+  "description": "VR 180 SBS video manager with streaming, ratings, and recently played tracking",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}
