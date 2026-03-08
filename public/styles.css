@@ -77,6 +77,28 @@
       display: inline-block;
     }
 
+    /* Dropdown rating styles */
+    .dropdown-rating {
+      position: absolute;
+      z-index: 10;
+      background: #222;
+      border: 1px solid #444;
+      padding: 6px 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      top: 100%;
+      left: 0;
+      min-width: 140px;
+      display: flex;
+      align-items: center;
+    }
+    .dropdown-stars .star {
+      font-size: 18px;
+      min-width: 22px;
+      min-height: 32px;
+      padding: 2px 1px;
+    }
+    
     /* Video list - supports both row and grid modes */
     .video-list {
       display: grid;

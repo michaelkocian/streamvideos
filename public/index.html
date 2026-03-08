@@ -109,17 +109,22 @@
       const container = document.createElement('span');
       container.className = 'stars' + (extraClass ? ' ' + extraClass : '');
 
+      // Only allow rating if extraClass is 'modal-stars'
+      const allowRate = extraClass === 'modal-stars';
+
       // 3 black stars for negative ratings (-3, -2, -1)
       for (let i = -1; i <= -1; i++) {
         const s = document.createElement('span');
         s.className = 'star star-black' + (currentRating !== null && currentRating <= i ? ' active' : '');
         s.textContent = '\u2605';
         s.title = String(i);
-        s.onclick = e => {
-          e.stopPropagation();
-          const newRating = (currentRating === i) ? 0 : i;
-          rateVideo(videoName, newRating);
-        };
+        if (allowRate) {
+          s.onclick = e => {
+            e.stopPropagation();
+            const newRating = (currentRating === i) ? 0 : i;
+            rateVideo(videoName, newRating);
+          };
+        }
         container.appendChild(s);
       }
 
@@ -134,12 +139,70 @@
         s.className = 'star star-yellow' + (currentRating !== null && currentRating >= i ? ' active' : '');
         s.textContent = '\u2605';
         s.title = '+' + i;
-        s.onclick = e => {
-          e.stopPropagation();
-          const newRating = (currentRating === i) ? 0 : i;
-          rateVideo(videoName, newRating);
-        };
+        if (allowRate) {
+          s.onclick = e => {
+            e.stopPropagation();
+            const newRating = (currentRating === i) ? 0 : i;
+            rateVideo(videoName, newRating);
+          };
+        }
         container.appendChild(s);
+      }
+
+      // If not modal, add dropdown for rating
+      if (!allowRate) {
+        container.onmouseenter = function(e) {
+          if (container.querySelector('.dropdown-rating')) return;
+          const dropdown = document.createElement('div');
+          dropdown.className = 'dropdown-rating';
+
+          // Build interactive stars for dropdown
+          const ddStars = document.createElement('span');
+          ddStars.className = 'stars dropdown-stars';
+          // Black star
+          for (let i = -1; i <= -1; i++) {
+            const s = document.createElement('span');
+            s.className = 'star star-black' + (currentRating !== null && currentRating <= i ? ' active' : '');
+            s.textContent = '\u2605';
+            s.title = String(i);
+            s.onclick = e => {
+              e.stopPropagation();
+              const newRating = (currentRating === i) ? 0 : i;
+              rateVideo(videoName, newRating);
+              dropdown.remove();
+            };
+            ddStars.appendChild(s);
+          }
+          // separator
+          const sep = document.createElement('span');
+          sep.className = 'sep';
+          ddStars.appendChild(sep);
+          // Yellow stars
+          for (let i = 1; i <= 5; i++) {
+            const s = document.createElement('span');
+            s.className = 'star star-yellow' + (currentRating !== null && currentRating >= i ? ' active' : '');
+            s.textContent = '\u2605';
+            s.title = '+' + i;
+            s.onclick = e => {
+              e.stopPropagation();
+              const newRating = (currentRating === i) ? 0 : i;
+              rateVideo(videoName, newRating);
+              dropdown.remove();
+            };
+            ddStars.appendChild(s);
+          }
+          dropdown.appendChild(ddStars);
+
+          // Remove dropdown on mouseleave
+          dropdown.onmouseleave = () => dropdown.remove();
+          container.appendChild(dropdown);
+        };
+        container.onmouseleave = function(e) {
+          const dd = container.querySelector('.dropdown-rating');
+          if (dd) dd.remove();
+        };
+        container.style.position = 'relative';
+        container.style.cursor = 'pointer';
       }
 
       return container;
@@ -291,7 +354,8 @@
           const metaRow = document.createElement('div');
           metaRow.className = 'meta-row';
           metaRow.appendChild(sizeEl);
-          metaRow.appendChild(starsEl);
+          // Only show stars, not interactive
+          metaRow.appendChild(buildStars(video.name, video.rating));
           metaRow.appendChild(del);
           row.appendChild(metaRow);
         } else {
