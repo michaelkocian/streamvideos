@@ -12,7 +12,19 @@
     <h1 id="homeTitle" style="cursor:pointer;">Stream Videos</h1>
     <div style="position:relative;display:inline-block;min-width:180px;width:100%;max-width:340px;">
       <input type="text" class="search-box" id="searchBox" placeholder="Search videos..." autocomplete="off" style="width:100%;">
+      <button id="searchDropdown" style="display:block;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 6px;">&#x25BC;</button>
       <button id="searchClear" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 6px;">&#x2715;</button>
+      <div id="starDropdown" style="display:none;position:absolute;top:100%;right:0;z-index:10;background:#222;border:1px solid #444;padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);min-width:140px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="star star-black" data-star="-1" title="-1">&#9733;</span>
+          <span class="sep"></span>
+          <span class="star star-yellow" data-star="1" title="1">&#9733;</span>
+          <span class="star star-yellow" data-star="2" title="2">&#9733;</span>
+          <span class="star star-yellow" data-star="3" title="3">&#9733;</span>
+          <span class="star star-yellow" data-star="4" title="4">&#9733;</span>
+          <span class="star star-yellow" data-star="5" title="5">&#9733;</span>
+        </div>
+      </div>
     </div>
     <select class="sort-select" id="sortBy">
       <option value="name-asc">Name A-Z</option>
@@ -79,6 +91,10 @@
     const searchBox = document.getElementById('searchBox');
     const sortBy = document.getElementById('sortBy');
     const stats = document.getElementById('stats');
+    const searchDropdown = document.getElementById('searchDropdown');
+    const searchClear = document.getElementById('searchClear');
+    const starDropdown = document.getElementById('starDropdown');
+    let selectedStar = null;
     const videoModal = document.getElementById('videoModal');
     const videoPlayer = document.getElementById('videoPlayer');
     const modalTitle = document.getElementById('modalTitle');
@@ -275,6 +291,19 @@
 
     async function handleSearch() {
       const q = searchBox.value.trim();
+      if (selectedStar !== null) {
+        try {
+          const res = await fetch('/api/search?rating=' + encodeURIComponent(selectedStar));
+          if (!res.ok) throw new Error();
+          items = await res.json();
+          currentDir = '';
+          renderBreadcrumb();
+          renderList(true); // flat mode
+        } catch {
+          videoList.innerHTML = '<div class="loading">Failed to search by stars. Is the server running?</div>';
+        }
+        return;
+      }
       if (!q) {
         loadVideos();
         return;
@@ -496,6 +525,57 @@
       handleSearch();
     };
     sortBy.onchange = handleSearch;
+
+    // Dropdown arrow click
+    searchDropdown.onclick = () => {
+      starDropdown.style.display = 'block';
+    };
+
+    // Star selection
+    starDropdown.onclick = e => {
+      if (e.target.classList.contains('star')) {
+        selectedStar = e.target.getAttribute('data-star');
+        searchBox.value = '';
+        starDropdown.style.display = 'none';
+        searchDropdown.style.display = 'none';
+        searchClear.style.display = 'block';
+        handleSearch();
+        // Show star in search box visually
+        searchBox.placeholder = '★ ' + selectedStar + ' star';
+      }
+    };
+
+    // Hide dropdown on outside click
+    document.addEventListener('click', e => {
+      if (!starDropdown.contains(e.target) && e.target !== searchDropdown) {
+        starDropdown.style.display = 'none';
+      }
+    });
+
+    // Clear button
+    searchClear.onclick = () => {
+      searchBox.value = '';
+      selectedStar = null;
+      searchBox.placeholder = 'Search videos...';
+      searchClear.style.display = 'none';
+      searchDropdown.style.display = 'block';
+      handleSearch();
+    };
+
+    // Search box input
+    searchBox.oninput = () => {
+      if (searchBox.value) {
+        searchDropdown.style.display = 'none';
+        searchClear.style.display = 'block';
+        selectedStar = null;
+        searchBox.placeholder = 'Search videos...';
+      } else {
+        searchDropdown.style.display = 'block';
+        searchClear.style.display = 'none';
+      }
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(handleSearch, 150);
+    };
 
     // --- Keyboard ---
     document.onkeydown = e => {

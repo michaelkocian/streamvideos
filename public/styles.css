@@ -466,3 +466,6 @@
     .video-item.deep-search:hover {
       background: #1e1e38 !important;
     }
+    #starDropdown .star {
+      cursor: pointer;
+    }

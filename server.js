@@ -42,11 +42,20 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Deep search videos recursively
 app.get('/api/search', (req, res) => {
   const q = (req.query.q || '').toLowerCase().trim();
-  console.log(`[SEARCH] Query: "${q}" from ${req.ip}`);
-  if (!q) {
+  const ratingParam = req.query.rating;
+  let rating = null;
+  if (ratingParam !== undefined) {
+    rating = parseInt(ratingParam, 10);
+    if (isNaN(rating) || rating < -1 || rating > 5) {
+      return res.status(400).json({ error: 'Invalid rating (-1 to 5)' });
+    }
+  }
+  console.log(`[SEARCH] Query: "${q}"${rating !== null ? `, rating: ${rating}` : ''} from ${req.ip}`);
+  if (!q && rating === null) {
     console.log(`[SEARCH] Empty query from ${req.ip}`);
     return res.json([]);
   }
+  const ratings = loadRatings();
   function walk(dir, relPath = '') {
     let results = [];
     let files;
@@ -58,20 +67,33 @@ app.get('/api/search', (req, res) => {
       const subRel = relPath ? relPath + '/' + file : file;
       if (stats.isDirectory()) {
         // If folder name matches, include it
-        if (file.toLowerCase().includes(q)) {
+        if (q && file.toLowerCase().includes(q)) {
           results.push({ name: subRel, type: 'folder' });
         }
         results = results.concat(walk(fullPath, subRel));
       } else {
         const ext = path.extname(file).toLowerCase();
-        if (VIDEO_EXTENSIONS.has(ext) && file.toLowerCase().includes(q)) {
-          const ratings = loadRatings();
-          const key = ratingKeyFromNameSize(subRel, stats.size);
+        if (!VIDEO_EXTENSIONS.has(ext)) continue;
+        // Always use full relative path for key
+        const key = ratingKeyFromNameSize(file, stats.size);
+        const fileRating = ratings[key] !== undefined ? ratings[key] : null;
+        // If searching by rating
+        if (rating !== null) {
+          if (fileRating === rating) {
+            results.push({
+              name: subRel,
+              type: 'video',
+              size: stats.size,
+              rating: fileRating,
+              modified: stats.mtimeMs
+            });
+          }
+        } else if (q && file.toLowerCase().includes(q)) {
           results.push({
             name: subRel,
             type: 'video',
             size: stats.size,
-            rating: ratings[key] !== undefined ? ratings[key] : null,
+            rating: fileRating,
             modified: stats.mtimeMs
           });
         }
