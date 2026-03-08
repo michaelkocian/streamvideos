@@ -9,7 +9,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>Stream Videos</h1>
+    <h1 id="homeTitle" style="cursor:pointer;">Stream Videos</h1>
     <div style="position:relative;display:inline-block;min-width:180px;width:100%;max-width:340px;">
       <input type="text" class="search-box" id="searchBox" placeholder="Search videos..." autocomplete="off" style="width:100%;">
       <button id="searchClear" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 6px;">&#x2715;</button>
@@ -86,9 +86,17 @@
     const confirmText = document.getElementById('confirmText');
     const gridSlider = document.getElementById('gridSlider');
     const breadcrumb = document.getElementById('breadcrumb');
+    const homeTitle = document.getElementById('homeTitle');
 
     gridSlider.value = gridCols;
     applyGrid();
+
+    // --- HomeTitle click ---
+    homeTitle.onclick = () => {
+      searchBox.value = '';
+      searchBox.value = '';
+      navigateTo('');
+    };
 
     // --- Helpers ---
     function fmtSize(bytes) {
@@ -247,6 +255,8 @@
     // --- Data ---
     function navigateTo(dir) {
       currentDir = dir;
+      searchBox.value = '';
+      document.getElementById('searchClear').style.display = 'none';
       loadVideos();
     }
 
@@ -260,6 +270,24 @@
         renderList();
       } catch {
         videoList.innerHTML = '<div class="loading">Failed to load videos. Is the server running?</div>';
+      }
+    }
+
+    async function handleSearch() {
+      const q = searchBox.value.trim();
+      if (!q) {
+        loadVideos();
+        return;
+      }
+      try {
+        const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+        if (!res.ok) throw new Error();
+        items = await res.json();
+        currentDir = '';
+        renderBreadcrumb();
+        renderList(true); // flat mode
+      } catch {
+        videoList.innerHTML = '<div class="loading">Failed to search videos. Is the server running?</div>';
       }
     }
 
@@ -287,58 +315,53 @@
     }
 
     // --- Render ---
-    function renderList() {
-      const { folders, videos } = getFiltered();
+    function renderList(flatMode = false) {
+      let folders = [], videos = [];
+      if (flatMode) {
+        folders = Array.isArray(items) ? items.filter(i => i.type === 'folder') : [];
+        videos = Array.isArray(items) ? items.filter(i => i.type === 'video') : [];
+      } else {
+        const filtered = getFiltered();
+        folders = filtered.folders;
+        videos = filtered.videos;
+      }
       const totalSize = videos.reduce((s, v) => s + v.size, 0);
-      const totalVideos = items.filter(i => i.type === 'video').length;
-      const extra = videos.length !== totalVideos ? ` (${totalVideos} total)` : '';
-      const folderCount = items.filter(i => i.type === 'folder').length;
+      const totalVideos = videos.length;
+      const folderCount = folders.length;
       const folderText = folderCount > 0 ? ` \u2022 ${folderCount} folders` : '';
-      stats.textContent = `${videos.length} videos${extra} \u2022 ${fmtSize(totalSize)}${folderText}`;
-
+      if (typeof stats !== 'undefined' && stats) {
+        stats.textContent = `${totalVideos} videos \u2022 ${fmtSize(totalSize)}${folderText}`;
+      }
       const frag = document.createDocumentFragment();
-
-      // Render folders first
+      // Render folders
       for (const folder of folders) {
         const row = document.createElement('div');
-        row.className = 'folder-item';
+        row.className = flatMode ? 'folder-item deep-search' : 'folder-item';
         row.onclick = () => navigateTo(currentDir ? currentDir + '/' + folder.name : folder.name);
-
         const icon = document.createElement('span');
         icon.className = 'folder-icon';
         icon.textContent = '\uD83D\uDCC1';
-
         const nameEl = document.createElement('span');
         nameEl.className = 'name';
         nameEl.textContent = folder.name;
-
         row.appendChild(icon);
         row.appendChild(nameEl);
         frag.appendChild(row);
       }
-
       // Render videos
       for (const video of videos) {
-        const key = videoKey(video.name);
+        const key = video.name;
         const pIdx = recentlyPlayed.indexOf(key);
         const row = document.createElement('div');
-        row.className = 'video-item' + (pIdx >= 0 && pIdx < 5 ? ' played-' + (pIdx + 1) : '');
+        row.className = 'video-item deep-search' + (pIdx >= 0 && pIdx < 5 ? ' played-' + (pIdx + 1) : '');
         row.onclick = () => playVideo(video.name);
-
-        // Name
         const nameEl = document.createElement('span');
         nameEl.className = 'name';
         nameEl.textContent = video.name;
-
-        // Size
         const sizeEl = document.createElement('span');
         sizeEl.className = 'size';
         sizeEl.textContent = fmtSize(video.size);
-
-        // Star rating
         const starsEl = buildStars(video.name, video.rating);
-
-        // Delete button
         const del = document.createElement('button');
         del.className = 'delete-btn';
         del.innerHTML = '&#x1F5D1;';
@@ -347,14 +370,11 @@
           e.stopPropagation();
           showDeleteConfirm(video.name);
         };
-
         if (gridCols > 1) {
-          // Grid mode: name on top, then meta row
           row.appendChild(nameEl);
           const metaRow = document.createElement('div');
           metaRow.className = 'meta-row';
           metaRow.appendChild(sizeEl);
-          // Only show stars, not interactive
           metaRow.appendChild(buildStars(video.name, video.rating));
           metaRow.appendChild(del);
           row.appendChild(metaRow);
@@ -364,10 +384,8 @@
           row.appendChild(starsEl);
           row.appendChild(del);
         }
-
         frag.appendChild(row);
       }
-
       videoList.innerHTML = '';
       videoList.appendChild(frag);
     }
@@ -469,15 +487,15 @@
     let searchTimer;
     searchBox.oninput = () => {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(renderList, 150);
+      searchTimer = setTimeout(handleSearch, 150);
       document.getElementById('searchClear').style.display = searchBox.value ? 'block' : 'none';
     };
     document.getElementById('searchClear').onclick = () => {
       searchBox.value = '';
       document.getElementById('searchClear').style.display = 'none';
-      renderList();
+      handleSearch();
     };
-    sortBy.onchange = renderList;
+    sortBy.onchange = handleSearch;
 
     // --- Keyboard ---
     document.onkeydown = e => {

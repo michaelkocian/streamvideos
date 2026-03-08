@@ -1,5 +1,4 @@
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       background: #0f0f1a;
@@ -455,3 +454,15 @@
     }
 
     .folder-item:hover .name { color: #80dfff; }
+
+    /* Deep search result styling */
+    .video-item.deep-search {
+      border-left-color: #00c8ff !important;
+      background: #181830 !important;
+    }
+    .video-item.deep-search .name {
+      color: #00c8ff;
+    }
+    .video-item.deep-search:hover {
+      background: #1e1e38 !important;
+    }

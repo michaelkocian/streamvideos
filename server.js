@@ -39,6 +39,53 @@ function isPathSafe(relPath) {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Deep search videos recursively
+app.get('/api/search', (req, res) => {
+  const q = (req.query.q || '').toLowerCase().trim();
+  console.log(`[SEARCH] Query: "${q}" from ${req.ip}`);
+  if (!q) {
+    console.log(`[SEARCH] Empty query from ${req.ip}`);
+    return res.json([]);
+  }
+  function walk(dir, relPath = '') {
+    let results = [];
+    let files;
+    try { files = fs.readdirSync(dir); } catch { return results; }
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      let stats;
+      try { stats = fs.statSync(fullPath); } catch { continue; }
+      const subRel = relPath ? relPath + '/' + file : file;
+      if (stats.isDirectory()) {
+        // If folder name matches, include it
+        if (file.toLowerCase().includes(q)) {
+          results.push({ name: subRel, type: 'folder' });
+        }
+        results = results.concat(walk(fullPath, subRel));
+      } else {
+        const ext = path.extname(file).toLowerCase();
+        if (VIDEO_EXTENSIONS.has(ext) && file.toLowerCase().includes(q)) {
+          const ratings = loadRatings();
+          const key = ratingKeyFromNameSize(subRel, stats.size);
+          results.push({
+            name: subRel,
+            type: 'video',
+            size: stats.size,
+            rating: ratings[key] !== undefined ? ratings[key] : null,
+            modified: stats.mtimeMs
+          });
+        }
+      }
+    }
+    return results;
+  }
+  if (!isPathSafe('')) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  const results = walk(VIDEO_DIR);
+  res.json(results);
+});
+
 // List videos and folders in a directory
 app.get('/api/videos', (req, res) => {
   try {
