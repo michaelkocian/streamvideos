@@ -22,6 +22,10 @@ function loadRatings() {
     return {};
   }
 }
+ 
+function ratingKeyFromNameSize(name, size) {
+  return `${name}::${size}`;
+}
 
 function saveRatings(ratings) {
   fs.writeFileSync(RATINGS_FILE, JSON.stringify(ratings, null, 2));
@@ -59,18 +63,18 @@ app.get('/api/videos', (req, res) => {
       const fullPath = path.join(targetDir, file);
       let stats;
       try { stats = fs.statSync(fullPath); } catch { continue; }
-
+ 
       if (stats.isDirectory()) {
         items.push({ name: file, type: 'folder' });
       } else {
         const ext = path.extname(file).toLowerCase();
         if (VIDEO_EXTENSIONS.has(ext)) {
-          const ratingKey = subdir ? subdir.replace(/\\/g, '/') + '/' + file : file;
+          const key = ratingKeyFromNameSize(file, stats.size);
           items.push({
             name: file,
             type: 'video',
             size: stats.size,
-            rating: ratings[ratingKey] !== undefined ? ratings[ratingKey] : null,
+            rating: ratings[key] !== undefined ? ratings[key] : null,
             modified: stats.mtimeMs
           });
         }
@@ -86,19 +90,21 @@ app.get('/api/videos', (req, res) => {
 
 // Rate a video (name can include subdir path like "sub/file.mp4")
 app.post('/api/rate', (req, res) => {
-  const { name, rating } = req.body;
-  console.log(`[RATE] ${name} set to ${rating} by ${req.ip}`);
-  if (typeof name !== 'string' || !name || typeof rating !== 'number' || rating < -3 || rating > 5 || !Number.isInteger(rating)) {
-    console.warn(`[DENIED] Invalid rating: ${name} -> ${rating}`);
-    return res.status(400).json({ error: 'Invalid name or rating (-3 to 5 integer)' });
+  const { name, size, rating } = req.body;
+  console.log(`[RATE] ${name} (${size}) set to ${rating} by ${req.ip}`);
+  if (typeof name !== 'string' || !name || typeof size !== 'number' || size <= 0 || typeof rating !== 'number' || rating < -3 || rating > 5 || !Number.isInteger(rating)) {
+    console.warn(`[DENIED] Invalid rating: ${name} (${size}) -> ${rating}`);
+    return res.status(400).json({ error: 'Invalid name, size, or rating (-3 to 5 integer)' });
   }
+  // Path safety check for name
   if (!isPathSafe(name)) {
     console.warn(`[DENIED] Rating access: ${name}`);
     return res.status(403).json({ error: 'Access denied' });
   }
-
+ 
   const ratings = loadRatings();
-  ratings[name] = rating;
+  const key = ratingKeyFromNameSize(name, size);
+  ratings[key] = rating;
   saveRatings(ratings);
   res.json({ success: true });
 });

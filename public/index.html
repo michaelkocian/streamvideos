@@ -9,7 +9,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>VR Videos</h1>
+    <h1>Stream Videos</h1>
     <div style="position:relative;display:inline-block;min-width:180px;width:100%;max-width:340px;">
       <input type="text" class="search-box" id="searchBox" placeholder="Search videos..." autocomplete="off" style="width:100%;">
       <button id="searchClear" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 6px;">&#x2715;</button>
@@ -338,15 +338,15 @@
 
     // --- Rating ---
     async function rateVideo(name, rating) {
-      const key = videoKey(name);
+      const v = items.find(v => v.name === name && v.type === 'video');
+      if (!v) return;
       try {
         await fetch('/api/rate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: key, rating })
+          body: JSON.stringify({ name: name, size: v.size, rating })
         });
-        const v = items.find(v => v.name === name && v.type === 'video');
-        if (v) v.rating = rating;
+        v.rating = rating;
         renderList();
         // update modal stars if open
         const modalStars = document.getElementById('modalStars');
