@@ -110,7 +110,10 @@
     // --- HomeTitle click ---
     homeTitle.onclick = () => {
       searchBox.value = '';
-      searchBox.value = '';
+      selectedStar = null;
+      searchBox.placeholder = 'Search videos...';
+      searchDropdown.style.display = 'block';
+      searchClear.style.display = 'none';
       navigateTo('');
     };
 
@@ -240,7 +243,14 @@
       const root = document.createElement('button');
       root.className = 'bc-link';
       root.textContent = '\uD83C\uDFE0 Root';
-      root.onclick = () => navigateTo('');
+      root.onclick = () => {
+        searchBox.value = '';
+        selectedStar = null;
+        searchBox.placeholder = 'Search videos...';
+        searchDropdown.style.display = 'block';
+        searchClear.style.display = 'none';
+        navigateTo('');
+      };
       breadcrumb.appendChild(root);
 
       let accumulated = '';
