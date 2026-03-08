@@ -40,8 +40,7 @@ Stream Videos is a simple, fast, and user-friendly web application for streaming
      - Open [http://<your-pc-ip>:3000](http://<your-pc-ip>:3000) in the browser.
 
 ## Screenshots
-
-> _Add screenshots here for desktop, mobile, and VR views._
+<img width="997" height="442" alt="image" src="https://github.com/user-attachments/assets/d5994fa8-e49d-4842-b167-14dd02eb33db" />
 
 ## How It Works
 
