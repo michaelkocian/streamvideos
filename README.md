@@ -12,7 +12,7 @@ Stream Videos is a simple, fast, and user-friendly web application for streaming
 - **Grid & List View**: Adjust zoom/grid for comfortable browsing.
 - **Recently Played Highlight**: See your last 5 played videos highlighted for quick access.
 - **Delete Videos**: Permanently delete unwanted videos from the interface.
-- **VR Friendly**: Optimized for Oculus Quest browser and other mobile devices.
+- **VR Friendly**: Optimized for Oculus Quest browser.
 
 ## Usage
 
@@ -37,7 +37,7 @@ Stream Videos is a simple, fast, and user-friendly web application for streaming
    - On your PC: Go to [http://localhost:3000](http://localhost:3000)
    - On other devices (phone, tablet, VR):
      - Find your PC's IP address (e.g., `192.168.1.100`).
-     - Open [http://<your-pc-ip>:3000](http://<your-pc-ip>:3000) in the browser.
+     - Open [http://[your-pc-ip]:3000](http://[your-pc-ip]:3000) in the browser.
 
 ## Screenshots
 <img width="997" height="442" alt="image" src="https://github.com/user-attachments/assets/d5994fa8-e49d-4842-b167-14dd02eb33db" />
